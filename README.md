@@ -63,6 +63,14 @@ python3 -m churn_risk --watch-pct -20 --critical-pct -40 --window-weeks 3
 
 Compare the mean of the last 4 weeks with the mean of the 4 weeks before that. A drop of ≥30% is a WATCH; ≥50% is CRITICAL. A smaller drop (≥15%) is a WATCH only if the 8-week linear trend is negative *and* at least 3 of the last 4 weeks sit below the baseline median — this catches slow erosion without firing on noise. Accounts with fewer than 8 weeks, or with a zero baseline, go to `NEEDS_DATA` and are explicitly **not** flagged as churn risks. Full rationale in [`SOLUTION_DESIGN.md`](SOLUTION_DESIGN.md).
 
+## Design document (PDF)
+
+[`SOLUTION_DESIGN.pdf`](SOLUTION_DESIGN.pdf) is the submission-ready design document: selectable text (not scanned), unencrypted, with three raster PNG diagrams embedded from [`docs/diagrams/`](docs/diagrams/). No vector diagram objects. Regenerate it after editing `SOLUTION_DESIGN.md`:
+
+```bash
+python3 scripts/build_design_pdf.py   # needs Chrome; override with CHROME_PATH
+```
+
 ## Hosted demo (GitHub Pages)
 
 `python3 -m churn_risk.dashboard` generates `site/index.html`, a self-contained CS-facing dashboard (summary cards, flagged-account cards with 12-week sparklines, filter buttons, and the evidence behind every flag). It uses the same scoring engine as the CLI and embeds its data inline, so it needs no API, backend, or JavaScript build step.
@@ -105,8 +113,11 @@ churn_risk/dashboard.py            generates the static hosted demo
 site/index.html                    generated dashboard (GitHub Pages source)
 tests/test_analysis.py             tier, edge-case and threshold tests
 tests/test_dashboard.py            dashboard generation tests
+scripts/build_design_pdf.py        regenerates the PDF and PNG diagrams
+docs/diagrams/                     raster PNG diagrams embedded in the PDF
 starter_kit/                       untouched provided files (reference only)
 SOLUTION_DESIGN.md                 assumptions, approach, trade-offs, next steps
+SOLUTION_DESIGN.pdf                submission-ready text PDF with raster diagrams
 README.md                          this file
 ```
 

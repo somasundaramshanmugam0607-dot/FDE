@@ -8,6 +8,8 @@ The inputs are one behavioral signal (weekly login counts) and zero churn labels
 
 **Deliverable:** a weekly-runnable command that prints "who to flag, and why", plus a JSON feed for a future CRM/Slack integration. A generated static dashboard (`site/index.html`, published via GitHub Pages) gives Dana a visual review surface without adding a backend.
 
+<!-- DIAGRAM:pipeline -->
+
 ## 2. Assumptions (all documented, all challengeable)
 
 - Each array is a dense run of consecutive weeks for one account; the last element is the most recent week. The seed file has no dates, so weeks are labelled W1…W12 relative to the file, not calendar weeks.
@@ -27,6 +29,8 @@ For an account with at least 8 weeks of history, split the last 8 weeks into a *
 | `weeks_below_baseline` | Count of recent weeks below the **median** of the baseline weeks | Persistence, robust to one odd week |
 | `slope_pct_per_week` | OLS slope over the last 8 weeks, divided by `mean(baseline)` | Direction across the whole window; catches slow erosion |
 
+<!-- DIAGRAM:timeline -->
+
 Decision table (defaults):
 
 | Tier | Rule | CSM action |
@@ -36,6 +40,8 @@ Decision table (defaults):
 | **WATCH** (slow burn) | `change_pct ≤ −15%` **and** negative 8-week slope **and** ≥3 of 4 recent weeks below baseline | Light-touch check-in before it becomes acute |
 | **HEALTHY** | Anything else | No action |
 | **NEEDS_DATA** | Fewer than 8 weeks, or a zero baseline | Fix data gap / onboarding check-in — **not** churn outreach |
+
+<!-- DIAGRAM:decision -->
 
 **Why 8 weeks?** You need two independent 4-week windows. This is not academic: the provided starter helper, given Fresh Startup Co's `[40, 12, 11, 13, 12]`, slices the lone week of 40 as the entire "previous" window and reports a **−70% decline**. That is an onboarding-week artifact. Our rule returns `NEEDS_DATA` instead. New accounts get a different playbook (enablement check-in), not a churn label.
 

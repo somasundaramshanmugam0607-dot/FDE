@@ -1,0 +1,66 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@page{size:A4;margin:15mm}
+body{font:10.2pt/1.42 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#1e293b}
+h1{font-size:18pt;color:#0f172a;margin:0 0 10pt}
+h2{font-size:12.5pt;color:#0f172a;margin:14pt 0 5pt;border-bottom:1px solid #e2e8f0;padding-bottom:3pt;break-after:avoid}
+h3{font-size:11pt;margin:10pt 0 4pt;break-after:avoid}
+p{margin:0 0 7pt}
+ul,ol{margin:0 0 8pt;padding-left:17pt}li{margin-bottom:3pt}
+table{width:100%;border-collapse:collapse;font-size:8.4pt;margin:6pt 0 10pt}
+th,td{border:1px solid #cbd5e1;padding:4pt 5pt;text-align:left;vertical-align:top}
+th{background:#f1f5f9;color:#0f172a}
+figure{margin:9pt 0 12pt;text-align:center;break-inside:avoid;page-break-inside:avoid}
+figure img{width:100%;max-width:100%;border:1px solid #e2e8f0}
+figcaption{font-size:8pt;color:#64748b;margin-top:4pt}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:8.6pt;background:#f1f5f9;padding:1pt 3pt;border-radius:3pt}
+strong{color:#0f172a}
+blockquote{border-left:3px solid #cbd5e1;padding-left:9pt;color:#475569;margin:0 0 8pt}
+hr{border:0;border-top:1px solid #e2e8f0;margin:10pt 0}
+</style></head><body>
+<h1>Churn Risk Flagging — Solution Design</h1>
+<h2>1. The problem, restated</h2>
+<p>Dana does not actually have a churn-prediction problem; she has a <strong>timing</strong> problem. Today the first reliable signal is a cancellation notice, which arrives after any chance to intervene has passed. What she needs next week is a short, ranked list of accounts whose product usage is fading *now*, with enough evidence attached that a CSM can open a conversation without feeling like they are crying wolf.</p>
+<p>The inputs are one behavioral signal (weekly login counts) and zero churn labels. That constraint drives the whole design: this is an <strong>explainable early-warning heuristic</strong>, not a trained classifier. Outreach is not free — a false alarm wastes scarce CSM time and can plant a cancellation idea in a healthy customer's head — so I optimized for interpretability and a deliberately small number of flags, not maximum recall.</p>
+<p><strong>Deliverable:</strong> a weekly-runnable command that prints "who to flag, and why", plus a JSON feed for a future CRM/Slack integration. A generated static dashboard (<code>site/index.html</code>, published via GitHub Pages) gives Dana a visual review surface without adding a backend.</p>
+<figure><img src="file:///Users/bharathamanisomasundaram/Documents/Somas/case-study-3-churn-risk-flagging/docs/diagrams/pipeline.png" alt="Figure 1. One scoring engine, three delivery surfaces."><figcaption>Figure 1. One scoring engine, three delivery surfaces.</figcaption></figure>
+<h2>2. Assumptions (all documented, all challengeable)</h2>
+<ul><li>Each array is a dense run of consecutive weeks for one account; the last element is the most recent week. The seed file has no dates, so weeks are labelled W1…W12 relative to the file, not calendar weeks.</li><li>A missing week is <strong>unknown</strong>, not zero. The loader rejects <code>null</code>, negative, or non-numeric values rather than silently inventing a zero. Real exports will need an explicit <code>missing</code> state.</li><li>Logins are a reasonable proxy for engagement with inventory-management software. A sustained fall is treated as a *plausible precursor* to non-renewal, never as proof of intent to churn.</li><li>No contract end dates, ARR, seat counts, support tickets, or product-event data are available. Therefore no dollar-weighted prioritization, per-seat normalization, or seasonality adjustment in v1.</li><li>4 weeks is the shortest window that smooths weekly noise while still leaving time to act before a renewal conversation.</li><li>Thresholds are starting defaults. With no outcome labels they <strong>cannot</strong> be statistically calibrated; they are chosen to be defensible and are exposed as CLI flags for tuning.</li></ul>
+<h2>3. Detection rule (v1)</h2>
+<p>For an account with at least 8 weeks of history, split the last 8 weeks into a <strong>baseline</strong> (weeks −8…−5) and a <strong>recent</strong> window (weeks −4…−1). Compute:</p>
+<table><thead><tr><th>Signal</th><th>Definition</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>change_pct</code></td><td><code>(mean(recent) − mean(baseline)) / mean(baseline)</code></td><td>Magnitude of the drop</td></tr>
+<tr><td><code>weeks_below_baseline</code></td><td>Count of recent weeks below the <strong>median</strong> of the baseline weeks</td><td>Persistence, robust to one odd week</td></tr>
+<tr><td><code>slope_pct_per_week</code></td><td>OLS slope over the last 8 weeks, divided by <code>mean(baseline)</code></td><td>Direction across the whole window; catches slow erosion</td></tr>
+</tbody></table>
+<figure><img src="file:///Users/bharathamanisomasundaram/Documents/Somas/case-study-3-churn-risk-flagging/docs/diagrams/timeline.png" alt="Figure 2. The two 4-week windows and the three signals (A-01 example)."><figcaption>Figure 2. The two 4-week windows and the three signals (A-01 example).</figcaption></figure>
+<p>Decision table (defaults):</p>
+<table><thead><tr><th>Tier</th><th>Rule</th><th>CSM action</th></tr></thead><tbody>
+<tr><td><strong>CRITICAL</strong></td><td><code>change_pct ≤ −50%</code></td><td>Reach out this week</td></tr>
+<tr><td><strong>WATCH</strong></td><td><code>−50% &lt; change_pct ≤ −30%</code></td><td>Monitor closely / light-touch check-in</td></tr>
+<tr><td><strong>WATCH</strong> (slow burn)</td><td><code>change_pct ≤ −15%</code> <strong>and</strong> negative 8-week slope <strong>and</strong> ≥3 of 4 recent weeks below baseline</td><td>Light-touch check-in before it becomes acute</td></tr>
+<tr><td><strong>HEALTHY</strong></td><td>Anything else</td><td>No action</td></tr>
+<tr><td><strong>NEEDS_DATA</strong></td><td>Fewer than 8 weeks, or a zero baseline</td><td>Fix data gap / onboarding check-in — <strong>not</strong> churn outreach</td></tr>
+</tbody></table>
+<figure><img src="file:///Users/bharathamanisomasundaram/Documents/Somas/case-study-3-churn-risk-flagging/docs/diagrams/decision.png" alt="Figure 3. Decision rule from history check to CSM action."><figcaption>Figure 3. Decision rule from history check to CSM action.</figcaption></figure>
+<p><strong>Why 8 weeks?</strong> You need two independent 4-week windows. This is not academic: the provided starter helper, given Fresh Startup Co's <code>[40, 12, 11, 13, 12]</code>, slices the lone week of 40 as the entire "previous" window and reports a <strong>−70% decline</strong>. That is an onboarding-week artifact. Our rule returns <code>NEEDS_DATA</code> instead. New accounts get a different playbook (enablement check-in), not a churn label.</p>
+<p><strong>Why zero baseline is special:</strong> a percentage decline from 0 is undefined. The starter code returns <code>0.0</code> in that case, which silently publishes "no risk". We return <code>NEEDS_DATA</code> with a human-readable request to verify the account is active.</p>
+<p><strong>Why these numbers?</strong> Stable accounts in the seed vary roughly ±10% week to week; the deliberately choppy account swings ±40% but those swings cancel in a 4-week average. A 30% fall in that average is well outside normal noise and still produces an actionable flag volume. 50% — roughly half of baseline engagement — is a strong abandonment signal worth an urgent outreach. The 15%-plus-persistence rule exists specifically for accounts that erode quietly all quarter and would otherwise only surface at renewal: requiring a negative 8-week slope *and* 3 of 4 weeks below the baseline median keeps that net narrow. All four numbers are one-line CLI overrides.</p>
+<h2>4. What the seed data produces</h2>
+<table><thead><tr><th>Account</th><th>Tier</th><th>4-week change</th><th>Evidence</th></tr></thead><tbody>
+<tr><td>A-05 Cascade Meridian</td><td>CRITICAL</td><td>−73%</td><td>24.3 → 6.5/wk; 4/4 below baseline; −17.9%/wk trend</td></tr>
+<tr><td>A-01 Northwind Traders</td><td>CRITICAL</td><td>−61%</td><td>26.8 → 10.5/wk; 4/4 below baseline; −13.4%/wk trend</td></tr>
+<tr><td>A-04 Harborview Inc</td><td>WATCH</td><td>−17%</td><td>Slow burn: 4/4 below baseline; −4.2%/wk trend</td></tr>
+<tr><td>A-06 Fresh Startup Co</td><td>NEEDS_DATA</td><td>n/a</td><td>Only 5 weeks; onboarding spike, no real baseline</td></tr>
+<tr><td>A-08 New Signup LLC</td><td>NEEDS_DATA</td><td>n/a</td><td>Only 2 weeks</td></tr>
+<tr><td>A-07 Choppy Retail Co</td><td>HEALTHY</td><td>−5%</td><td>High weekly variance, no downward trend</td></tr>
+<tr><td>A-02 Bluepeak Corp</td><td>HEALTHY</td><td>+5%</td><td>Flat</td></tr>
+<tr><td>A-03 Solace Digital</td><td>HEALTHY</td><td>+41%</td><td>Growing</td></tr>
+</tbody></table>
+<p>Result: 2 urgent conversations, 1 monitored account, 2 data/onboarding follow-ups, 3 left alone. On an 8-account sample that is a plausible CSM workload; at 8,000 accounts the same rule becomes a queue ranked by severity, which is why the JSON output exists.</p>
+<h2>5. Trade-offs considered</h2>
+<ul><li><strong>ML model / anomaly detection:</strong> rejected. No labels, 8 accounts, and a model would be unexplainable to Dana. A two-window comparison is auditable in a spreadsheet.</li><li><strong>Single-week z-score:</strong> rejected. It fires on Choppy Retail Co and on the Fresh Startup onboarding spike — exactly the false positives Dana cannot afford.</li><li><strong>Absolute login floor:</strong> considered (a 2 → 1 login drop is meaningless) but there is no low-volume account in the seed to justify a number. It is the first guard I would add with a larger dataset.</li><li><strong>Binary flag vs tiered flag:</strong> tiers preserve CSM capacity. Everything cannot be "urgent".</li><li><strong>Global vs per-account thresholds:</strong> per-account baselines would handle seasonal retailers better, but need more than 12 weeks per account. Next step, not v1.</li><li><strong>LLM explanations:</strong> available as <code>--explain llm</code>, off by default, with deterministic evidence-based text as the fallback. It never invents a number because the prompt only receives computed evidence; if the API is unavailable the template is returned. I would not turn it on in production until CSMs confirm it improves outreach.</li></ul>
+<h2>6. With more time, data, or budget</h2>
+<ol><li><strong>Backtest against real outcomes.</strong> Join renewal/cancellation records, measure precision/recall by threshold, and tune to CSM capacity. This is the only way to move from "reasonable defaults" to "calibrated".</li><li><strong>Risk × value prioritization.</strong> Multiply by ARR and days-to-renewal so an at-risk Enterprise account with a renewal in 30 days outranks an at-risk Starter account with 10 months left.</li><li><strong>More signals.</strong> Admin vs total logins, feature adoption, support-ticket sentiment, seat utilization, billing changes. Logins alone cannot distinguish "team got smaller" from "team left".</li><li><strong>Seasonality and data quality.</strong> Holiday calendars, retail peak seasons, explicit missing-week handling, and alerts when a feed stops updating.</li><li><strong>Close the loop.</strong> Let CSMs record "real issue / false alarm / already known" on each flag; store dispositions and use them as training labels later.</li><li><strong>Operationalize.</strong> Scheduled job writing to Slack/CRM, a dashboard, an audit trail of which rule fired when, and drift monitoring.</li></ol>
+<h2>7. Anticipated challenges</h2>
+<ul><li>*"A 17% drop is not a crisis — why flag Harborview?"* It is not a crisis, which is why it is WATCH, not CRITICAL. It is monotonic for 8 weeks across 4/4 below-baseline weeks; by renewal that trajectory becomes a 40% loss.</li><li>*"Choppy Retail Co swings 40% weekly — surely that's risk?"* Volatility alone is not decline. Its 4-week average is flat and its 8-week slope is positive. If Dana wants a separate "erratic usage" queue, that is a different rule with a different action.</li><li>*"The thresholds look arbitrary."* They are. They are explicit, centralized, overridable, and accompanied by a calibration plan. Pretending they were derived from data that does not exist would be worse.</li><li>*"What if CS can only handle two accounts this week?"* Sort the JSON by <code>change_pct</code> and take the top two; the tiering already does this, and ARR weighting is step 2 above.</li></ul>
+</body></html>
