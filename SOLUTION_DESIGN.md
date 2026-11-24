@@ -6,7 +6,7 @@ Dana does not actually have a churn-prediction problem; she has a **timing** pro
 
 The inputs are one behavioral signal (weekly login counts) and zero churn labels. That constraint drives the whole design: this is an **explainable early-warning heuristic**, not a trained classifier. Outreach is not free — a false alarm wastes scarce CSM time and can plant a cancellation idea in a healthy customer's head — so I optimized for interpretability and a deliberately small number of flags, not maximum recall.
 
-**Deliverable:** a weekly-runnable command that prints "who to flag, and why", plus a JSON feed for a future CRM/Slack integration.
+**Deliverable:** a weekly-runnable command that prints "who to flag, and why", plus a JSON feed for a future CRM/Slack integration. A generated static dashboard (`site/index.html`, published via GitHub Pages) gives Dana a visual review surface without adding a backend.
 
 ## 2. Assumptions (all documented, all challengeable)
 

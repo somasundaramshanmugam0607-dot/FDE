@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Churn Risk — Customer Success early warning</title>
+<style>
+  :root {
+    --navy:#0f172a; --ink:#1e293b; --muted:#64748b; --line:#e2e8f0;
+    --bg:#f1f5f9; --red:#dc2626; --amber:#d97706; --green:#059669; --slate:#475569;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  header { background:var(--navy); color:#fff; padding:32px 24px 28px; }
+  .wrap { max-width:1080px; margin:0 auto; }
+  .eyebrow { text-transform:uppercase; letter-spacing:.14em; font-size:11px;
+    color:#94a3b8; margin:0 0 8px; }
+  h1 { margin:0 0 6px; font-size:28px; letter-spacing:-.02em; }
+  header p { margin:0; color:#cbd5e1; font-size:14px; }
+  main { padding:28px 24px 56px; }
+  .cards { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:28px; }
+  .stat { background:#fff; border:1px solid var(--line); border-radius:12px; padding:16px 18px; }
+  .stat b { display:block; font-size:30px; line-height:1.1; }
+  .stat span { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.06em; }
+  .stat.critical b { color:var(--red); } .stat.watch b { color:var(--amber); }
+  .stat.needs b { color:var(--slate); } .stat.healthy b { color:var(--green); }
+  .bar { display:flex; gap:8px; align-items:center; margin-bottom:18px; flex-wrap:wrap; }
+  .bar h2 { margin:0 auto 0 0; font-size:18px; }
+  button { border:1px solid var(--line); background:#fff; color:var(--ink); border-radius:999px;
+    padding:7px 14px; font-size:13px; cursor:pointer; }
+  button:hover { border-color:#94a3b8; }
+  button.active { background:var(--navy); color:#fff; border-color:var(--navy); }
+  section { margin-bottom:30px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:16px; }
+  .card { background:#fff; border:1px solid var(--line); border-left:5px solid var(--slate);
+    border-radius:12px; padding:18px; }
+  .card.critical { border-left-color:var(--red); } .card.watch { border-left-color:var(--amber); }
+  .top { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+  .badge { display:inline-block; font-size:10px; font-weight:700; letter-spacing:.09em;
+    text-transform:uppercase; padding:3px 8px; border-radius:999px; background:#f1f5f9; color:var(--slate); }
+  .badge.critical { background:#fee2e2; color:var(--red); }
+  .badge.watch { background:#fef3c7; color:var(--amber); }
+  h3 { margin:9px 0 2px; font-size:17px; }
+  .plan { margin:0; color:var(--muted); font-size:12px; }
+  .big { text-align:right; font-size:26px; font-weight:700; letter-spacing:-.02em; }
+  .big.critical { color:var(--red); } .big.watch { color:var(--amber); }
+  .big small { display:block; font-size:10px; font-weight:500; color:var(--muted);
+    text-transform:uppercase; letter-spacing:.05em; }
+  .spark { width:100%; height:44px; margin:14px 0 6px; }
+  .evidence { margin:6px 0 14px; font-size:13px; color:#334155; }
+  .metrics { display:flex; flex-wrap:wrap; gap:6px; }
+  .chip { background:#f8fafc; border:1px solid var(--line); border-radius:6px;
+    padding:4px 8px; font-size:11px; color:var(--muted); }
+  .row { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px 16px;
+    margin-bottom:8px; display:flex; gap:12px; align-items:flex-start; }
+  .row .dot { width:9px; height:9px; border-radius:50%; margin-top:6px; flex:none; background:var(--slate); }
+  .dot.healthy { background:var(--green); } .dot.needs_data { background:var(--slate); }
+  .row strong { font-size:14px; } .row p { margin:2px 0 0; color:var(--muted); font-size:12px; }
+  .row .change { margin-left:auto; font-variant-numeric:tabular-nums; font-size:13px;
+    color:var(--muted); white-space:nowrap; }
+  footer { border-top:1px solid var(--line); padding:18px 24px 30px; color:var(--muted); font-size:11px; }
+  footer a { color:var(--slate); }
+  @media (max-width:640px) { .cards { grid-template-columns:repeat(2,1fr); } h1 { font-size:23px; } }
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <p class="eyebrow">Vantage Retail Systems · Customer Success</p>
+  <h1>Churn risk early warning</h1>
+  <p>Snapshot generated 24 Nov 2026, 14:00 UTC from weekly login counts. Flags are prompts for a conversation, not predictions of intent.</p>
+</div></header>
+<main class="wrap">
+  <div class="cards" id="cards"></div>
+  <div class="bar"><h2>Account review</h2>
+    <button data-filter="all" class="active">All</button>
+    <button data-filter="flagged">Flagged</button>
+    <button data-filter="needs_data">Needs data</button>
+    <button data-filter="healthy">Healthy</button>
+  </div>
+  <section data-group="flagged"><div class="grid" id="flagged"></div></section>
+  <section data-group="needs_data"><h2 style="font-size:14px;color:#64748b">Needs data — not churn flags</h2><div id="needs"></div></section>
+  <section data-group="healthy"><h2 style="font-size:14px;color:#64748b">No action</h2><div id="healthy"></div></section>
+</main>
+<footer class="wrap">
+  Rule: CRITICAL ≤ -50% · WATCH ≤ -30% · sustained decline ≤ -15% (3/4 weeks below baseline) · Accounts with fewer than 8 weeks, or a zero baseline, are never flagged.
+  <br>Generated by <code>python3 -m churn_risk.dashboard</code> · <a href="https://github.com/somasundaramshanmugam0607-dot/FDE">source repository</a>
+</footer>
+<script>
+const DATA = [{"account_id":"A-05","account_name":"Cascade Meridian","plan_tier":"Enterprise","tier":"CRITICAL","reason":"Logins fell 73% (24.2 -> 6.5/wk) over the last 4 weeks; 4/4 recent weeks below baseline and a -17.9%/wk trend over 8 weeks.","weeks_observed":12,"baseline_avg":24.25,"recent_avg":6.5,"change_pct":-73.19587628865979,"weeks_below_baseline":4,"slope_per_week":-4.345238095238095,"slope_pct_per_week":-17.918507609229255,"sustained":true,"flagged":true,"label":"A-05 Cascade Meridian","weekly_logins":[35,33,36,34,32,30,20,15,10,7,5,4]},{"account_id":"A-01","account_name":"Northwind Traders","plan_tier":"Growth","tier":"CRITICAL","reason":"Logins fell 61% (26.8 -> 10.5/wk) over the last 4 weeks; 4/4 recent weeks below baseline and a -13.4%/wk trend over 8 weeks.","weeks_observed":12,"baseline_avg":26.75,"recent_avg":10.5,"change_pct":-60.747663551401864,"weeks_below_baseline":4,"slope_per_week":-3.5833333333333335,"slope_pct_per_week":-13.395638629283491,"sustained":true,"flagged":true,"label":"A-01 Northwind Traders","weekly_logins":[28,26,29,27,30,28,25,24,14,11,9,8]},{"account_id":"A-04","account_name":"Harborview Inc","plan_tier":"Enterprise","tier":"WATCH","reason":"Slow but sustained erosion: 17% below the prior 4-week average (21.5 -> 17.8/wk), 4/4 recent weeks below baseline and a -4.2%/wk trend over 8 weeks.","weeks_observed":12,"baseline_avg":21.5,"recent_avg":17.75,"change_pct":-17.441860465116278,"weeks_below_baseline":4,"slope_per_week":-0.8928571428571429,"slope_pct_per_week":-4.152823920265781,"sustained":true,"flagged":true,"label":"A-04 Harborview Inc","weekly_logins":[24,23,25,24,22,23,21,20,19,18,17,17]},{"account_id":"A-06","account_name":"Fresh Startup Co","plan_tier":"Starter","tier":"NEEDS_DATA","reason":"Only 5 week(s) of history; need 8 (4 baseline + 4 recent) before calling a trend. Route to onboarding check-in, not churn outreach.","weeks_observed":5,"baseline_avg":null,"recent_avg":null,"change_pct":null,"weeks_below_baseline":null,"slope_per_week":null,"slope_pct_per_week":null,"sustained":false,"flagged":false,"label":"A-06 Fresh Startup Co","weekly_logins":[40,12,11,13,12]},{"account_id":"A-08","account_name":"New Signup LLC","plan_tier":"Starter","tier":"NEEDS_DATA","reason":"Only 2 week(s) of history; need 8 (4 baseline + 4 recent) before calling a trend. Route to onboarding check-in, not churn outreach.","weeks_observed":2,"baseline_avg":null,"recent_avg":null,"change_pct":null,"weeks_below_baseline":null,"slope_per_week":null,"slope_pct_per_week":null,"sustained":false,"flagged":false,"label":"A-08 New Signup LLC","weekly_logins":[9,11]},{"account_id":"A-07","account_name":"Choppy Retail Co","plan_tier":"Growth","tier":"HEALTHY","reason":"No material decline: 4-week change -5% (19.8 -> 18.8/wk), 2/4 recent weeks below baseline.","weeks_observed":12,"baseline_avg":19.75,"recent_avg":18.75,"change_pct":-5.063291139240507,"weeks_below_baseline":2,"slope_per_week":0.023809523809523808,"slope_pct_per_week":0.12055455093429776,"sustained":false,"flagged":false,"label":"A-07 Choppy Retail Co","weekly_logins":[18,25,14,22,17,24,15,23,16,21,18,20]},{"account_id":"A-02","account_name":"Bluepeak Corp","plan_tier":"Growth","tier":"HEALTHY","reason":"No material decline: 4-week change +5% (20.8 -> 21.8/wk), 0/4 recent weeks below baseline.","weeks_observed":12,"baseline_avg":20.75,"recent_avg":21.75,"change_pct":4.819277108433735,"weeks_below_baseline":0,"slope_per_week":0.19047619047619047,"slope_pct_per_week":0.9179575444635685,"sustained":false,"flagged":false,"label":"A-02 Bluepeak Corp","weekly_logins":[20,22,21,23,20,21,22,20,21,23,22,21]},{"account_id":"A-03","account_name":"Solace Digital","plan_tier":"Starter","tier":"HEALTHY","reason":"No material decline: 4-week change +41% (17.0 -> 24.0/wk), 0/4 recent weeks below baseline.","weeks_observed":12,"baseline_avg":17.0,"recent_avg":24.0,"change_pct":41.17647058823529,"weeks_below_baseline":0,"slope_per_week":1.7380952380952381,"slope_pct_per_week":10.224089635854341,"sustained":false,"flagged":false,"label":"A-03 Solace Digital","weekly_logins":[10,11,12,13,15,16,18,19,21,23,25,27]}];
+const COLORS = {CRITICAL:"#dc2626", WATCH:"#d97706", HEALTHY:"#059669", NEEDS_DATA:"#475569"};
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pct = v => v == null ? "n/a" : (v > 0 ? "+" : "") + v.toFixed(0) + "%";
+function spark(values, color) {
+  if (!values || values.length < 2) return '<svg class="spark" aria-label="insufficient history"></svg>';
+  const w=240, h=44, pad=3;
+  const max=Math.max(...values), min=Math.min(...values), span=(max-min)||1;
+  const pts = values.map((v,i) => (pad + i*(w-2*pad)/(values.length-1)).toFixed(1) + "," +
+    (h-pad-(v-min)/span*(h-2*pad)).toFixed(1)).join(" ");
+  return '<svg class="spark" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none" role="img" aria-label="weekly login trend">' +
+    '<polyline points="'+pts+'" fill="none" stroke="'+color+'" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+}
+function card(d) {
+  const cls = d.tier.toLowerCase(), color = COLORS[d.tier];
+  return '<article class="card '+cls+'"><div class="top"><div>' +
+    '<span class="badge '+cls+'">'+esc(d.tier)+'</span>' +
+    '<h3>'+esc(d.label)+'</h3><p class="plan">'+esc(d.plan_tier)+' plan</p></div>' +
+    '<div class="big '+cls+'">'+pct(d.change_pct)+'<small>4-week change</small></div></div>' +
+    spark(d.weekly_logins, color) +
+    '<p class="evidence">'+esc(d.reason)+'</p><div class="metrics">' +
+    '<span class="chip">Recent '+d.recent_avg.toFixed(1)+'/wk</span>' +
+    '<span class="chip">Baseline '+d.baseline_avg.toFixed(1)+'/wk</span>' +
+    '<span class="chip">'+d.weeks_below_baseline+'/4 weeks below baseline</span>' +
+    '<span class="chip">8-week trend '+d.slope_pct_per_week.toFixed(1)+'%/wk</span></div></article>';
+}
+function row(d) {
+  return '<div class="row"><span class="dot '+d.tier.toLowerCase()+'"></span><div><strong>'+
+    esc(d.label)+'</strong><p>'+esc(d.reason)+'</p></div><span class="change">'+pct(d.change_pct)+'</span></div>';
+}
+const count = t => DATA.filter(d => d.tier === t).length;
+document.getElementById("cards").innerHTML = [
+  ["critical","CRITICAL",count("CRITICAL")], ["watch","WATCH",count("WATCH")],
+  ["needs","NEEDS DATA",count("NEEDS_DATA")], ["healthy","HEALTHY",count("HEALTHY")]
+].map(([cls,label,n]) => '<div class="stat '+cls+'"><b>'+n+'</b><span>'+label+'</span></div>').join("");
+document.getElementById("flagged").innerHTML = DATA.filter(d => d.flagged).map(card).join("");
+document.getElementById("needs").innerHTML = DATA.filter(d => d.tier === "NEEDS_DATA").map(row).join("");
+document.getElementById("healthy").innerHTML = DATA.filter(d => d.tier === "HEALTHY").map(row).join("");
+document.querySelectorAll("button[data-filter]").forEach(btn => btn.addEventListener("click", () => {
+  document.querySelectorAll("button[data-filter]").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  const f = btn.dataset.filter;
+  document.querySelectorAll("section[data-group]").forEach(sec => {
+    const group = sec.dataset.group;
+    sec.style.display = (f === "all" || f === group || (f === "flagged" && group === "flagged")) ? "" : "none";
+  });
+}));
+</script>
+</body>
+</html>
